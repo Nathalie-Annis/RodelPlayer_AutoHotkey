@@ -9,6 +9,10 @@ isExecutingSpeed := false                  ; 倍速执行锁
 currentSpeed := 1                          ; 当前倍速
 isWindowTopMost := false                   ; 窗口置顶状态
 
+isBossKeyActive := false                   ; 老板键激活状态
+playerWindowPos := {}                      ; 播放器窗口位置信息
+`::BossKey()                               ; ` 老板键
+
 ; ==================== 启用控制 ====================
 IsInPlayer() {
     try {
@@ -90,6 +94,73 @@ $Space:: {                                 ; 长按空格3倍速
 }
 
 ; ==================== 辅助函数 ====================
+; 老板键功能
+BossKey() {
+    global isBossKeyActive, playerWindowPos
+    
+    try {
+        if (!isBossKeyActive) {
+            if (!WinActive("ahk_exe RodelPlayer.UI.exe")) {
+                ; 如果不在播放器窗口，发送原始的 ` 键
+                SendText("``")
+                return
+            }
+            ; 暂停播放，保存窗口位置和状态
+            if (IsInPlayer()) {
+                Send("{Space}")
+                SoundSetMute(1)
+            }
+            hwnd := WinGetID("A")
+            ; 验证窗口句柄有效性
+            if (!hwnd || !WinExist(hwnd)) {
+                ShowStatusTip("无法获取有效的播放器窗口", "top", "red")
+                return
+            }
+            WinGetPos(&x, &y, &width, &height, hwnd)
+            playerWindowPos := {x: x, y: y, width: width, height: height, hwnd: hwnd}
+            Sleep(100)
+            ; 隐藏窗口
+            WinHide(hwnd)
+            isBossKeyActive := true
+        } else {
+            ; 恢复窗口
+            if (playerWindowPos.HasOwnProp("hwnd")) {
+                hwnd := playerWindowPos.hwnd
+                ; 检查保存的窗口是否仍然存在
+                if (!WinExist(hwnd)) {
+                    ; 窗口可能已关闭，尝试查找任何播放器窗口
+                    hwnd := WinExist("ahk_exe RodelPlayer.UI.exe")
+                    if (!hwnd) {
+                        ; 没有找到播放器窗口，重置状态
+                        isBossKeyActive := false
+                        playerWindowPos := {}
+                        ShowStatusTip("播放器窗口已关闭", "top", "red")
+                        return
+                    }
+                    ; 找到了其他播放器窗口，更新句柄
+                    playerWindowPos.hwnd := hwnd
+                }
+                ; 显示窗口
+                WinShow(hwnd)
+                ; 恢复窗口位置，激活窗口
+                WinMove(playerWindowPos.x, playerWindowPos.y, 
+                       playerWindowPos.width, playerWindowPos.height, hwnd)
+                WinActivate(hwnd)
+                Sleep(100)
+                ; 恢复播放
+                if (IsInPlayer()) {
+                    Send("{Space}")
+                    SoundSetMute(0)
+                }
+                isBossKeyActive := false
+            }
+        }
+    } catch Error as e {
+        isBossKeyActive := false
+        ShowStatusTip("老板键操作失败", "top", "red")
+    }
+}
+
 ; 窗口置顶切换
 ToggleWindowTopMost() {
     global isWindowTopMost
@@ -263,7 +334,7 @@ ShowStatusTip(message, position := "top", color := "", width := 180, height := 6
     y_pos := position = "bottom" ? sh - sh//7 : sh//7
     
     ; 创建GUI
-    statusGui := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox +LastFound -SysMenu -Caption")
+    statusGui := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox +LastFound -SysMenu -Caption +ToolWindow")
     statusGui.BackColor := "0xF6F6F6"
     
     ; 设置文字颜色

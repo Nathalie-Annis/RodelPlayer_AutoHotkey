@@ -7,6 +7,7 @@ longPressThreshold := 180                  ; 空格长按触发阈值（毫秒�
 minHoldTime := 600                         ; 长按最短按住时间（毫秒）
 isExecutingSpeed := false                  ; 倍速执行锁
 currentSpeed := 1                          ; 当前倍速
+isWindowTopMost := false                   ; 窗口置顶状态
 
 ; ==================== 启用控制 ====================
 IsInPlayer() {
@@ -40,6 +41,7 @@ d::Send("{Right}")                         ; d 快进
 .::Send("{Up}")                            ; . 增加播放器音量
 m::SoundSetMute(-1)                        ; m 系统静音切换
 +q::WinClose("A")                          ; Q 关闭播放窗口
+t::ToggleWindowTopMost()                   ; t 切换窗口置顶状态
 
 q:: {                                      ; q-q 关闭窗口
     if (A_TimeSincePriorHotkey && A_TimeSincePriorHotkey < 750 && A_PriorHotkey == "q") {
@@ -88,6 +90,25 @@ $Space:: {                                 ; 长按空格3倍速
 }
 
 ; ==================== 辅助函数 ====================
+; 窗口置顶切换
+ToggleWindowTopMost() {
+    global isWindowTopMost
+    try {
+        hwnd := WinGetID("A")
+        isWindowTopMost := !isWindowTopMost
+        
+        if (isWindowTopMost) {
+            WinSetAlwaysOnTop(1, hwnd)
+            ShowStatusTip("窗口已置顶", "top", "green")
+        } else {
+            WinSetAlwaysOnTop(0, hwnd)
+            ShowStatusTip("窗口取消置顶", "top", "")
+        }
+    } catch Error as e {
+        ShowStatusTip("置顶切换失败", "top", "red")
+    }
+}
+
 ; 快捷键音量调节
 AdjustSystemVolume(delta) {
     try {

@@ -11,7 +11,11 @@ isWindowTopMost := false                   ; 窗口置顶状态
 
 isBossKeyActive := false                   ; 老板键激活状态
 playerWindowPos := {}                      ; 播放器窗口位置信息
+isWaitingForMouse := false                 ; 是否正在等待鼠标移动
 `::BossKey()                               ; ` 老板键
+
+; 脚本退出时确保恢复鼠标光标显示
+OnExit (*) => SystemCursor("Show")
 
 ; ==================== 启用控制 ====================
 IsInPlayer() {
@@ -44,14 +48,18 @@ d::Send("{Right}")                         ; d 快进
 ,::Send("{Down}")                          ; , 降低播放器音量
 .::Send("{Up}")                            ; . 增加播放器音量
 m::SoundSetMute(-1)                        ; m 系统静音切换
-+q::WinClose("A")                          ; Q 关闭播放窗口
 t::ToggleWindowTopMost()                   ; t 切换窗口置顶状态
+v::ToggleMousePosition()                   ; v 切换控制栏显示
++q::WinClose("A")                          ; Q 关闭播放窗口
 
 q:: {                                      ; q-q 关闭窗口
     if (A_TimeSincePriorHotkey && A_TimeSincePriorHotkey < 750 && A_PriorHotkey == "q") {
         WinClose("A")
     }
 }
+
+CapsLock & s::Send("{Down}")               ; CapsLock+S 降低播放器音量
+CapsLock & w::Send("{Up}")                 ; CapsLock+W 增加播放器音量
 
 ; ========== 音量和亮度控制 ==========
 ^+Up::AdjustBrightness(20)                 ; Ctrl+Shift+↑ 增加系统亮度
@@ -94,6 +102,76 @@ $Space:: {                                 ; 长按空格3倍速
 }
 
 ; ==================== 辅助函数 ====================
+; 鼠标位置切换功能
+ToggleMousePosition() {
+    ; 获取当前鼠标位置和屏幕尺寸
+    MouseGetPos(&currentX, &currentY)
+    sw := A_ScreenWidth
+    sh := A_ScreenHeight
+
+    ; 显示上下两侧控制栏的位置
+    topSixthY := sh // 14
+    bottomSixthY := sh * 5 // 6
+    
+    ; 检测当前Y坐标位置并决定移动目标
+    if (currentY < topSixthY || currentY >= bottomSixthY) {
+        ; 此时已经显示控制栏，应当移动鼠标到屏幕中心，隐藏光标并设置监控
+        SystemCursor("Hide")
+        MouseMove(sw // 2, sh // 2, 0)
+        StartMouseMonitoring()
+    } else {
+        ; 此时没有显示控制栏
+        MouseMove(sw // 2, sh, 0)
+    }
+}
+
+; 开始鼠标移动监控
+StartMouseMonitoring() {
+    global isWaitingForMouse
+    
+    ; 获取当前鼠标位置
+    MouseGetPos(&currentMouseX, &currentMouseY)
+    isWaitingForMouse := true
+    
+    ; 启动鼠标移动检测定时器 (50ms间隔检测)，传递保存的鼠标坐标
+    SetTimer(() => CheckMouseMove(currentMouseX, currentMouseY), 50)
+    
+    ; 启动2秒超时定时器，直接调用统一的停止函数
+    SetTimer(StopMouseMonitoring, -2000)
+}
+
+; 检测鼠标移动
+CheckMouseMove(savedMouseX, savedMouseY) {
+    global isWaitingForMouse
+    
+    if (!isWaitingForMouse) {
+        SetTimer(() => CheckMouseMove(savedMouseX, savedMouseY), 0)  ; 停止定时器
+        return
+    }
+    
+    MouseGetPos(&currentX, &currentY)
+    
+    ; 检测鼠标是否移动
+    if (Abs(currentX - savedMouseX) > 5 || Abs(currentY - savedMouseY) > 5) {
+        ; 鼠标移动了，停止所有监控
+        StopMouseMonitoring()
+    }
+}
+
+; 停止鼠标监控的统一函数
+StopMouseMonitoring() {
+    global isWaitingForMouse
+    
+    ; 显示光标
+    SystemCursor("Show")
+    ; 停止监控状态
+    isWaitingForMouse := false
+    ; 停止所有相关定时器
+    ; 注意：由于CheckMouseMove现在是带参数的匿名函数，需要通过设置isWaitingForMouse为false来停止
+    ; CheckMouseMove会在下次调用时自动停止定时器
+    SetTimer(StopMouseMonitoring, 0)    ; 停止超时定时器
+}
+
 ; 老板键功能
 BossKey() {
     global isBossKeyActive, playerWindowPos
@@ -364,6 +442,42 @@ CleanupGui(hwnd, guis) {
     if (guis.Has(hwnd)) {
         try guis[hwnd].Destroy()
         guis.Delete(hwnd)
+    }
+}
+
+; https://wyagd001.github.io/v2/docs/lib/DllCall.htm#ExHideCursor
+SystemCursor(cmd)  ; cmd = "Show|Hide|Toggle|Reload"
+{
+    static visible := true, c := Map()
+    static sys_cursors := [32512, 32513, 32514, 32515, 32516, 32642
+                         , 32643, 32644, 32645, 32646, 32648, 32649, 32650]
+    if (cmd = "Reload" or !c.Count)  ; 在请求或首次调用时进行重载.
+    {
+        for i, id in sys_cursors
+        {
+            h_cursor  := DllCall("LoadCursor", "Ptr", 0, "Ptr", id)
+            h_default := DllCall("CopyImage", "Ptr", h_cursor, "UInt", 2
+                , "Int", 0, "Int", 0, "UInt", 0)
+            h_blank   := DllCall("CreateCursor", "Ptr", 0, "Int", 0, "Int", 0
+                , "Int", 32, "Int", 32
+                , "Ptr", Buffer(32*4, 0xFF)
+                , "Ptr", Buffer(32*4, 0))
+            c[id] := {default: h_default, blank: h_blank}
+        }
+    }
+    switch cmd
+    {
+      case "Show": visible := true
+      case "Hide": visible := false
+      case "Toggle": visible := !visible
+      default: return
+    }
+    for id, handles in c
+    {
+        h_cursor := DllCall("CopyImage"
+            , "Ptr", visible ? handles.default : handles.blank
+            , "UInt", 2, "Int", 0, "Int", 0, "UInt", 0)
+        DllCall("SetSystemCursor", "Ptr", h_cursor, "UInt", id)
     }
 }
 

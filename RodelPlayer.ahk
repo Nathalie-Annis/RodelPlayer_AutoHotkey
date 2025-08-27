@@ -1,23 +1,23 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 
+`::BossKey()                               ; ` 老板键
+OnExit (*) => SystemCursor("Show")         ; 脚本退出时确保恢复鼠标光标显示
+
 ; ==================== 全局变量 ====================
-scriptEnabled := true                      ; 脚本初始启用状态
-longPressThreshold := 180                  ; 空格长按触发阈值（毫秒）
-minHoldTime := 600                         ; 长按最短按住时间（毫秒）
-isExecutingSpeed := false                  ; 倍速执行锁
+scriptEnabled := true                      ; 脚本默认启用状态
+longPressThreshold := 180                  ; 空格长按倍速触发阈值（毫秒）
+minHoldTime := 600                         ; 空格长按倍速最短执行时间（毫秒）
+
+; 以下变量通常无需更改
+isExecutingSpeed := false                  ; 倍速调节互斥锁
 currentSpeed := 1                          ; 当前倍速
 isWindowTopMost := false                   ; 窗口置顶状态
-
 isBossKeyActive := false                   ; 老板键激活状态
 playerWindowPos := {}                      ; 播放器窗口位置信息
 isWaitingForMouse := false                 ; 是否正在等待鼠标移动
-`::BossKey()                               ; ` 老板键
 
-; 脚本退出时确保恢复鼠标光标显示
-OnExit (*) => SystemCursor("Show")
-
-; ==================== 启用控制 ====================
+; ==================== 脚本启用界面控制 ====================
 IsInPlayer() {
     try {
         title := WinGetTitle("A")
@@ -41,7 +41,7 @@ IsInPlayer() {
 #HotIf WinActive("ahk_exe RodelPlayer.UI.exe") && IsInPlayer() && scriptEnabled
 
 ; ==================== 快捷键自定义 ====================
-; ========== 基本控制 ==========
+; 基本控制
 f::Send("{F11}")                           ; f 全屏
 a::Send("{Left}")                          ; a 快退
 d::Send("{Right}")                         ; d 快进
@@ -61,18 +61,7 @@ q:: {                                      ; q-q 关闭窗口
 CapsLock & s::Send("{Down}")               ; CapsLock+S 降低播放器音量
 CapsLock & w::Send("{Up}")                 ; CapsLock+W 增加播放器音量
 
-; ========== 音量和亮度控制 ==========
-^+Up::AdjustBrightness(20)                 ; Ctrl+Shift+↑ 增加系统亮度
-^+Down::AdjustBrightness(-20)              ; Ctrl+Shift+↓ 减少系统亮度
-
-^!Up::AdjustSystemVolume(2)                ; Ctrl+Alt+↑ 增加系统音量
-^!Down::AdjustSystemVolume(-2)             ; Ctrl+Alt+↓ 降低系统音量
-
-WheelUp::SendShiftWheel("Up")              ; 鼠标滚轮向上 增加播放器音量
-WheelDown::SendShiftWheel("Down")          ; 鼠标滚轮向下 降低播放器音量
-
-; ========== 播放速度控制 ==========
-; 倍速快捷键
+; 播放速度控制
 w::ToggleSpeed(3)                          ; w 3倍速切换
 s::ToggleSpeed(2)                          ; s 2倍速切换
 x::AdjustSpeedStep(-1)                     ; x 降低倍速
@@ -258,20 +247,6 @@ ToggleWindowTopMost() {
     }
 }
 
-; 快捷键音量调节
-AdjustSystemVolume(delta) {
-    try {
-        SoundSetVolume(Format("{:+d}", delta))
-    } catch {
-        ShowStatusTip("音量调节失败", "top", "red")
-    }
-}
-
-; 滚轮音量调节
-SendShiftWheel(direction) {
-    Send("{Shift down}{Wheel" . direction . "}{Shift up}")
-}
-
 ; 倍速调节逻辑
 ToggleSpeed(targetSpeed) {
     global isExecutingSpeed, currentSpeed
@@ -334,65 +309,6 @@ ResetSpeedState() {
     currentSpeed := 1
     isExecutingSpeed := false
     ShowStatusTip("倍速状态已重置")
-}
-
-; 亮度调节逻辑
-AdjustBrightness(delta) {
-    current := GetBrightness()
-    newLevel := current + delta
-    if (newLevel > 100)
-        newLevel := 100
-    if (newLevel < 0)
-        newLevel := 0
-    
-    if (SetBrightness(newLevel)) {
-        ShowStatusTip("亮度: " . newLevel . "%")
-    } else {
-        ShowStatusTip("亮度调节失败", "top", "red")
-    }
-}
-
-GetBrightness() {
-    try {
-        get_brightness_cmd := 'powershell (Get-WmiObject -Namespace root/wmi -Class WmiMonitorBrightness).CurrentBrightness'
-        result := StdoutToVar(get_brightness_cmd)
-        
-        if (result.ExitCode == 0 && result.Output) {
-            ; 去除换行符和空格
-            cleanOutput := Trim(result.Output, " `t`r`n")
-            
-            if (cleanOutput != "") {
-                brightness := Integer(cleanOutput)
-                return brightness
-            }
-        }
-    }
-    catch Error as e {
-        ; 静默处理错误
-    }
-    return 50
-}
-
-SetBrightness(level) {
-    if (level < 0) 
-        level := 0
-    if (level > 100) 
-        level := 100
-        
-    try {
-        set_brightness_cmd := 'powershell (Get-WmiObject -Namespace root/wmi -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1,' . level . ')'
-        result := StdoutToVar(set_brightness_cmd)
-        
-        if (result.ExitCode == 0) {
-            ShowStatusTip("亮度: " . level . "%")
-            return true
-        }
-    }
-    catch Error as e {
-        ; 静默处理错误
-    }
-    
-    return false
 }
 
 ; ==================== 通用函数 ====================

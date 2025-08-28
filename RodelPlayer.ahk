@@ -58,9 +58,6 @@ q:: {                                      ; q-q 关闭窗口
     }
 }
 
-CapsLock & s::Send("{Down}")               ; CapsLock+S 降低播放器音量
-CapsLock & w::Send("{Up}")                 ; CapsLock+W 增加播放器音量
-
 ; 播放速度控制
 w::ToggleSpeed(3)                          ; w 3倍速切换
 s::ToggleSpeed(2)                          ; s 2倍速切换
@@ -312,6 +309,17 @@ ResetSpeedState() {
 }
 
 ; ==================== 通用函数 ====================
+; 检测系统是否为深色模式
+IsDarkMode() {
+    try {
+        ; 读取注册表中的深色模式设置
+        regValue := RegRead("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme")
+        return regValue == 0  ; 0表示深色模式，1表示浅色模式
+    } catch {
+        return false  ; 默认返回浅色模式
+    }
+}
+
 ShowStatusTip(message, position := "top", color := "", width := 180, height := 60, offX := 32, offY := 11) {
     static guis := Map()
     
@@ -327,13 +335,23 @@ ShowStatusTip(message, position := "top", color := "", width := 180, height := 6
     x_pos := sw//2 - width//2
     y_pos := position = "bottom" ? sh - sh//7 : sh//7
     
+    ; 检测深色模式
+    isDark := IsDarkMode()
+    
     ; 创建GUI
     statusGui := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox +LastFound -SysMenu -Caption +ToolWindow")
-    statusGui.BackColor := "0xF6F6F6"
+    
+    ; 根据深色模式设置背景色
+    statusGui.BackColor := isDark ? "0x2D2D30" : "0xF6F6F6"
     
     ; 设置文字颜色
     colorMap := Map("green", "0x008000", "red", "0xFF0000")
-    textColor := colorMap.Has(color) ? colorMap[color] : "0x000000"
+    if (color != "" && colorMap.Has(color)) {
+        textColor := colorMap[color]
+    } else {
+        ; 根据深色模式设置默认文字颜色
+        textColor := isDark ? "0xFFFFFF" : "0x000000"
+    }
     
     statusGui.SetFont("s10 c" . textColor, "Microsoft YaHei")
     statusGui.Add("Text", 

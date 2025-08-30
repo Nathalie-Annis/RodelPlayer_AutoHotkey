@@ -49,7 +49,9 @@ d::Send("{Right}")                         ; d 快进
 .::Send("{Up}")                            ; . 增加播放器音量
 m::SoundSetMute(-1)                        ; m 系统静音切换
 t::ToggleWindowTopMost()                   ; t 切换窗口置顶状态
-v::ToggleMousePosition()                   ; v 切换控制栏显示
+v::ToggleControlBar()                      ; v 控制栏显示/隐藏
+i::OpenInformationMenu()                   ; i 打开视频信息菜单
+k::OpenSubtitleMenu()                      ; k 打开字幕调节菜单
 +q::WinClose("A")                          ; Q 关闭播放窗口
 
 q:: {                                      ; q-q 关闭窗口
@@ -88,8 +90,49 @@ $Space:: {                                 ; 长按空格3倍速
 }
 
 ; ==================== 辅助函数 ====================
-; 鼠标位置切换功能
-ToggleMousePosition() {
+; 打开字幕菜单
+OpenSubtitleMenu() {
+    ; 获取屏幕尺寸
+    sw := A_ScreenWidth
+    sh := A_ScreenHeight
+    
+    ; 计算目标位置（按比例计算）
+    targetX := Round(sw * (2288 / 2560))
+    targetY := Round(sh * (1310 / 1440))
+
+    SystemCursor("Hide")
+    ; 移动到目标位置并点击
+    MouseMove(targetX, targetY, 0)
+    Click()
+    
+    ; 按下Tab键
+    Send("{Tab}")
+    MouseMove(sw, sh // 2, 0)
+    SystemCursor("Show")
+}
+
+OpenInformationMenu() {
+    ; 获取屏幕尺寸
+    sw := A_ScreenWidth
+    sh := A_ScreenHeight
+    
+    ; 计算目标位置（按比例计算）
+    targetX := Round(sw * (300 / 2560))
+    targetY := Round(sh * (1300 / 1440))
+
+    SystemCursor("Hide")
+    ; 移动到目标位置并点击
+    MouseMove(targetX, targetY, 0)
+    Click()
+    
+    ; 按下Tab键
+    Send("{Tab}")
+    MouseMove(0, sh, 0)
+    SystemCursor("Show")
+}
+
+; 控制栏显示/隐藏切换功能
+ToggleControlBar() {
     ; 获取当前鼠标位置和屏幕尺寸
     MouseGetPos(&currentX, &currentY)
     sw := A_ScreenWidth

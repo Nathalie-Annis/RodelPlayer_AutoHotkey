@@ -1,13 +1,20 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 
-`:: BossKey()                               ; ` 老板键
+`:: BossKey()                              ; ` 老板键
 OnExit (*) => SystemCursor("Show")         ; 脚本退出时确保恢复鼠标光标显示
 
 ; ==================== 全局变量 ====================
 scriptEnabled := true                      ; 脚本默认启用状态
 longPressThreshold := 180                  ; 空格长按倍速触发阈值（毫秒）
 minHoldTime := 600                         ; 空格长按倍速最短执行时间（毫秒）
+
+; 自绘脚本提示条默认参数 如果显示存在异常请调整以下参数
+statusTipPosition := "top"                 ; 状态提示位置 ("top" 或 "bottom")
+statusTipWidth := 184                      ; 状态提示窗口宽度
+statusTipHeight := 65                      ; 状态提示窗口高度
+statusTipOffsetX := 32                     ; 状态提示X轴偏移量 数值越大 文字位置越靠左
+statusTipOffsetY := 11                     ; 状态提示Y轴偏移量 数值越大 文字位置越靠上
 
 ; 以下变量通常无需更改
 isExecutingSpeed := false                  ; 倍速调节互斥锁
@@ -17,7 +24,12 @@ isBossKeyActive := false                   ; 老板键激活状态
 playerWindowPos := {}                      ; 播放器窗口位置信息
 isWaitingForMouse := false                 ; 是否正在等待鼠标移动
 
+; 全局屏幕尺寸变量
+sw := A_ScreenWidth                        ; 屏幕宽度
+sh := A_ScreenHeight                       ; 屏幕高度
+
 ; ==================== 脚本启用界面控制 ====================
+; 判断活跃窗口是否为播放器，避免在主页进行搜索时拦截正常的键盘输入
 IsInPlayer() {
     try {
         title := WinGetTitle("A")
@@ -38,6 +50,7 @@ IsInPlayer() {
         scriptEnabled ? "green" : "red")
 }
 
+; 在播放器窗口内并且启用脚本的情况下允许快捷键映射
 #HotIf WinActive("ahk_exe RodelPlayer.UI.exe") && IsInPlayer() && scriptEnabled
 
 ; ==================== 快捷键自定义 ====================
@@ -52,6 +65,7 @@ t:: ToggleWindowTopMost()                   ; t 切换窗口置顶状态
 v:: ToggleControlBar()                      ; v 控制栏显示/隐藏
 i:: OpenInformationMenu()                   ; i 打开视频信息菜单
 k:: OpenSubtitleMenu()                      ; k 打开字幕调节菜单
+l:: OpenAudioTrackMenu()                    ; l 打开音轨调节菜单
 +q:: WinClose("A")                          ; Q 关闭播放窗口
 
 q:: {                                      ; q-q 关闭窗口
@@ -67,7 +81,7 @@ x:: AdjustSpeedStep(-1)                     ; x 降低倍速
 c:: AdjustSpeedStep(1)                      ; c 增加倍速
 +Backspace:: ResetSpeedState()              ; Shift+Backspace 重置倍速状态
 
-$Space:: {                                 ; 长按空格3倍速
+$Space:: {                                  ; 长按空格3倍速
     global isExecutingSpeed
     if (isExecutingSpeed) {
         return
@@ -95,13 +109,41 @@ OpenSubtitleMenu() {
     ; 获取当前活动窗口的工作区位置和大小
     WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
 
-    ; 获取屏幕尺寸
-    sw := A_ScreenWidth
-    sh := A_ScreenHeight
-
     ; 基于屏幕尺寸计算固定偏移量（不随窗口大小变化）
     ; 距离右边 272px，距离底部 130px（基于2560x1440的原始坐标）
     rightOffsetRatio := 272 / 2560    ; 距离右边的比例
+    bottomOffsetRatio := 130 / 1440   ; 距离底部的比例
+
+    ; 根据屏幕实际大小计算偏移距离
+    rightOffset := Round(sw * rightOffsetRatio)
+    bottomOffset := Round(sh * bottomOffsetRatio)
+
+    ; 计算目标位置
+    targetX := clientWidth - rightOffset
+    targetY := clientHeight - bottomOffset
+
+    SystemCursor("Hide")
+    ; 移动到目标位置并点击
+    MouseMove(targetX, targetY, 0)
+    Click()
+
+    ; 按下Tab键
+    Send("{Tab}")
+    if (IsWindowFullScreen()) {
+        ; 移动鼠标到窗口右侧中央
+        MouseMove(clientWidth, clientHeight // 2, 0)
+    }
+    SystemCursor("Show")
+}
+
+; 打开音轨菜单
+OpenAudioTrackMenu() {
+    ; 获取当前活动窗口的工作区位置和大小
+    WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
+
+    ; 基于屏幕尺寸计算固定偏移量（不随窗口大小变化）
+    ; 距离右边 200px，距离底部 130px（基于2560x1440的原始坐标）
+    rightOffsetRatio := 200 / 2560    ; 距离右边的比例
     bottomOffsetRatio := 130 / 1440   ; 距离底部的比例
 
     ; 根据屏幕实际大小计算偏移距离
@@ -133,10 +175,6 @@ OpenInformationMenu() {
         return
     }
 
-    ; 获取屏幕尺寸
-    sw := A_ScreenWidth
-    sh := A_ScreenHeight
-
     ; 计算目标位置（按比例计算）
     targetX := Round(sw * (300 / 2560))
     targetY := Round(sh * (1300 / 1440))
@@ -154,30 +192,36 @@ OpenInformationMenu() {
 
 ; 控制栏显示/隐藏切换功能
 ToggleControlBar() {
-    ; 检测当前窗口是否全屏
-    if (!IsWindowFullScreen()) {
-        ShowStatusTip("全屏播放时解锁此功能", "top", "red", 250, 65, 43, 11)
-        return
-    }
+    ; 统一使用屏幕坐标
+    CoordMode("Mouse", "Screen")
+    MouseGetPos(&sx, &sy)
 
-    ; 获取当前鼠标位置和屏幕尺寸
-    MouseGetPos(&currentX, &currentY)
-    sw := A_ScreenWidth
-    sh := A_ScreenHeight
+    ; 取该窗口客户区的屏幕位置与尺寸
+    WinGetClientPos(&cx, &cy, &cw, &ch, "A")
 
-    ; 显示上下两侧控制栏的位置
-    topSixthY := sh // 14
-    bottomSixthY := sh * 5 // 6
+    ; 把鼠标从相对坐标系换算到绝对坐标系
+    mx := sx - cx
+    my := sy - cy
 
-    ; 检测当前Y坐标位置并决定移动目标
-    if (currentY < topSixthY || currentY >= bottomSixthY) {
-        ; 此时已经显示控制栏，应当移动鼠标到屏幕中心，隐藏光标并设置监控
+    topBand := sh // 14
+    bottomBand := sh // 6
+
+    ; 判断控制栏显示状态
+    isShowingControlBar :=
+        (mx >= 0 && mx <= cw) &&
+        ((my >= 0 && my < topBand)
+        || (my > ch - bottomBand && my <= ch))
+
+    if (isShowingControlBar) {
         SystemCursor("Hide")
-        MouseMove(sw // 2, sh // 2, 0)
+        MouseMove(cx + cw // 2, cy + 3 * ch // 8, 0)
         StartMouseMonitoring()
     } else {
-        ; 此时没有显示控制栏
-        MouseMove(sw // 2, sh, 0)
+        if (IsWindowFullScreen()) {
+            MouseMove(cx + cw // 2, cy + ch, 0)
+        } else {
+            MouseMove(cx + cw // 2, cy + ch - sh // 10, 0)
+        }
     }
 }
 
@@ -185,31 +229,41 @@ ToggleControlBar() {
 StartMouseMonitoring() {
     global isWaitingForMouse
 
-    ; 获取当前鼠标位置
-    MouseGetPos(&currentMouseX, &currentMouseY)
     isWaitingForMouse := true
 
-    ; 启动鼠标移动检测定时器 (50ms间隔检测)，传递保存的鼠标坐标
-    SetTimer(() => CheckMouseMove(currentMouseX, currentMouseY), 50)
+    ; 启动鼠标移动检测定时器 (50ms间隔检测)
+    SetTimer(CheckMouseMove, 50)
 
-    ; 启动2秒超时定时器，直接调用统一的停止函数
+    ; 启动2秒超时定时器
     SetTimer(StopMouseMonitoring, -2000)
 }
 
 ; 检测鼠标移动
-CheckMouseMove(savedMouseX, savedMouseY) {
+CheckMouseMove() {
     global isWaitingForMouse
 
     if (!isWaitingForMouse) {
-        SetTimer(() => CheckMouseMove(savedMouseX, savedMouseY), 0)  ; 停止定时器
+        SetTimer(CheckMouseMove, 0)  ; 停止定时器
         return
     }
 
+    ; 获取当前鼠标位置
     MouseGetPos(&currentX, &currentY)
 
-    ; 检测鼠标是否移动
-    if (Abs(currentX - savedMouseX) > 5 || Abs(currentY - savedMouseY) > 5) {
-        ; 鼠标移动了，停止所有监控
+    ; 获取当前窗口的中心位置
+    try {
+        WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
+        centerX := clientWidth // 2
+        centerY := 3 * clientHeight // 8
+
+        ; 检测鼠标是否离开窗口中心区域（允许一定的容差范围）
+        tolerance := 5  ; 容差像素
+        if (Abs(currentX - centerX) > tolerance || Abs(currentY - centerY) > tolerance) {
+            ; 鼠标移动了，停止所有监控
+            StopMouseMonitoring()
+        }
+    } catch {
+        ; 如果获取窗口信息失败，停止监控
         StopMouseMonitoring()
     }
 }
@@ -383,8 +437,6 @@ ResetSpeedState() {
 IsWindowFullScreen() {
     try {
         WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
-        sw := A_ScreenWidth
-        sh := A_ScreenHeight
 
         ; 判断窗口是否全屏（工作区大小等于或接近屏幕大小）
         return (clientWidth >= sw && clientHeight >= sh)
@@ -405,7 +457,8 @@ IsDarkMode() {
     }
 }
 
-ShowStatusTip(message, position := "top", color := "", width := 184, height := 65, offX := 32, offY := 11) {
+ShowStatusTip(message, position := statusTipPosition, color := "", width := statusTipWidth, height := statusTipHeight,
+    offX := statusTipOffsetX, offY := statusTipOffsetY) {
     static guis := Map()
 
     ; 清理旧的提示窗口
@@ -416,8 +469,6 @@ ShowStatusTip(message, position := "top", color := "", width := 184, height := 6
 
     ; 获取当前活动窗口的工作区位置和大小
     WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
-    sw := A_ScreenWidth
-    sh := A_ScreenHeight
 
     ; 在窗口工作区内计算提示位置
     x_pos := clientX + (clientWidth - width) // 2

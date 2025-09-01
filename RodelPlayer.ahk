@@ -1,32 +1,33 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 
-`:: BossKey()                              ; ` 老板键
-OnExit (*) => SystemCursor("Show")         ; 脚本退出时确保恢复鼠标光标显示
+`:: BossKey()                               ; ` 老板键
+OnExit (*) => SystemCursor("Show")          ; 脚本退出时确保恢复鼠标光标显示
 
 ; ==================== 全局变量 ====================
-scriptEnabled := true                      ; 脚本默认启用状态
-longPressThreshold := 180                  ; 空格长按倍速触发阈值（毫秒）
-minHoldTime := 600                         ; 空格长按倍速最短执行时间（毫秒）
+scriptEnabled := true                       ; 脚本默认启用状态
+longPressThreshold := 180                   ; 空格长按倍速触发阈值（毫秒）
+minHoldTime := 600                          ; 空格长按倍速最短执行时间（毫秒）
 
 ; 自绘脚本提示条默认参数 如果显示存在异常请调整以下参数
-statusTipPosition := "top"                 ; 状态提示位置 ("top" 或 "bottom")
-statusTipWidth := 184                      ; 状态提示窗口宽度
-statusTipHeight := 65                      ; 状态提示窗口高度
-statusTipOffsetX := 32                     ; 状态提示X轴偏移量 数值越大 文字位置越靠左
-statusTipOffsetY := 11                     ; 状态提示Y轴偏移量 数值越大 文字位置越靠上
+statusTipPosition := "top"                  ; 状态提示位置 ("top" 或 "bottom")
+statusTipWidth := 184                       ; 状态提示窗口宽度
+statusTipHeight := 65                       ; 状态提示窗口高度
+statusTipOffsetX := 32                      ; 状态提示X轴偏移量 数值越大 文字位置越靠左
+statusTipOffsetY := 11                      ; 状态提示Y轴偏移量 数值越大 文字位置越靠上
+statusTipDuration := 750                    ; 状态提示显示时长（毫秒）
 
 ; 以下变量通常无需更改
-isExecutingSpeed := false                  ; 倍速调节互斥锁
-currentSpeed := 1                          ; 当前倍速
-isWindowTopMost := false                   ; 窗口置顶状态
-isBossKeyActive := false                   ; 老板键激活状态
-playerWindowPos := {}                      ; 播放器窗口位置信息
-isWaitingForMouse := false                 ; 是否正在等待鼠标移动
+isExecutingSpeed := false                   ; 倍速调节互斥锁
+currentSpeed := 1                           ; 当前倍速
+isWindowTopMost := false                    ; 窗口置顶状态
+isBossKeyActive := false                    ; 老板键激活状态
+playerWindowPos := {}                       ; 播放器窗口位置信息
+isWaitingForMouse := false                  ; 是否正在等待鼠标移动
 
 ; 全局屏幕尺寸变量
-sw := A_ScreenWidth                        ; 屏幕宽度
-sh := A_ScreenHeight                       ; 屏幕高度
+sw := A_ScreenWidth                         ; 屏幕宽度
+sh := A_ScreenHeight                        ; 屏幕高度
 
 ; ==================== 脚本启用界面控制 ====================
 ; 判断活跃窗口是否为播放器，避免在主页进行搜索时拦截正常的键盘输入
@@ -45,9 +46,7 @@ IsInPlayer() {
 /:: {
     global scriptEnabled
     scriptEnabled := !scriptEnabled
-    ShowStatusTip(scriptEnabled ? "脚本已启用" : "脚本已禁用",
-        "top",
-        scriptEnabled ? "green" : "red")
+    ShowStatusTip(scriptEnabled ? "脚本已启用" : "脚本已禁用", , scriptEnabled ? "green" : "red")
 }
 
 ; 在播放器窗口内并且启用脚本的情况下允许快捷键映射
@@ -68,7 +67,7 @@ k:: OpenSubtitleMenu()                      ; k 打开字幕调节菜单
 l:: OpenAudioTrackMenu()                    ; l 打开音轨调节菜单
 +q:: WinClose("A")                          ; Q 关闭播放窗口
 
-q:: {                                      ; q-q 关闭窗口
+q:: {                                       ; q-q 关闭窗口
     if (A_TimeSincePriorHotkey && A_TimeSincePriorHotkey < 750 && A_PriorHotkey == "q") {
         WinClose("A")
     }
@@ -110,8 +109,8 @@ OpenSubtitleMenu() {
     WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
 
     ; 基于屏幕尺寸计算固定偏移量（不随窗口大小变化）
-    ; 距离右边 272px，距离底部 130px（基于2560x1440的原始坐标）
-    rightOffsetRatio := 272 / 2560    ; 距离右边的比例
+    ; 距离右边 269px，距离底部 130px（基于2560x1440的原始坐标）
+    rightOffsetRatio := 269 / 2560    ; 距离右边的比例
     bottomOffsetRatio := 130 / 1440   ; 距离底部的比例
 
     ; 根据屏幕实际大小计算偏移距离
@@ -123,15 +122,32 @@ OpenSubtitleMenu() {
     targetY := clientHeight - bottomOffset
 
     SystemCursor("Hide")
-    ; 移动到目标位置并点击
+    ; 移动到目标位置，判断是否存在弹幕占位
     MouseMove(targetX, targetY, 0)
-    Click()
+    SystemCursor("Hide")
+    Sleep(50)
+    if (HasDanmaku()) {
+        targetX := targetX - Round(sw * 153 / 2560)
+    }
+
+    ; 获取到字幕应在的位置后，判断该位置是否是字幕
+    pixelColor := PixelGetColor(targetX, targetY)
+    ; 此位置是白色的话说明是倍速按钮，无字幕
+    if (pixelColor == 0xFFFFFF) {
+        ShowStatusTip("当前视频无字幕")
+        MouseMove(clientWidth / 2, 3 * clientHeight / 8, 0)
+        StartMouseMonitoring()
+        return
+    } else {
+        MouseMove(targetX, targetY, 0)
+        Click()
+    }
 
     ; 按下Tab键
     Send("{Tab}")
     if (IsWindowFullScreen()) {
         ; 移动鼠标到窗口右侧中央
-        MouseMove(clientWidth, clientHeight // 2, 0)
+        MouseMove(clientWidth, clientHeight / 2, 0)
     }
     SystemCursor("Show")
 }
@@ -157,13 +173,18 @@ OpenAudioTrackMenu() {
     SystemCursor("Hide")
     ; 移动到目标位置并点击
     MouseMove(targetX, targetY, 0)
+    SystemCursor("Hide")
+    Sleep(50)
+    if (HasDanmaku()) {
+        MouseMove(targetX - Round(sw * 153 / 2560), targetY, 0)
+    }
     Click()
 
     ; 按下Tab键
     Send("{Tab}")
     if (IsWindowFullScreen()) {
         ; 移动鼠标到窗口右侧中央
-        MouseMove(clientWidth, clientHeight // 2, 0)
+        MouseMove(clientWidth, clientHeight / 2, 0)
     }
     SystemCursor("Show")
 }
@@ -171,7 +192,7 @@ OpenAudioTrackMenu() {
 OpenInformationMenu() {
     ; 检测当前窗口是否全屏
     if (!IsWindowFullScreen()) {
-        ShowStatusTip("全屏播放时解锁此功能", "top", "red", 250, 65, 43, 11)
+        ShowStatusTip("全屏播放时解锁此功能", , "red", 250, 65, 43, 11, "top")
         return
     }
 
@@ -203,24 +224,26 @@ ToggleControlBar() {
     mx := sx - cx
     my := sy - cy
 
-    topBand := sh // 14
-    bottomBand := sh // 6
+    topBand := sh / 13.7
+    bottomBand := sh / 6
 
     ; 判断控制栏显示状态
     isShowingControlBar :=
         (mx >= 0 && mx <= cw) &&
         ((my >= 0 && my < topBand)
-        || (my > ch - bottomBand && my <= ch))
+        || (my >= ch - bottomBand && my <= ch))
 
     if (isShowingControlBar) {
         SystemCursor("Hide")
-        MouseMove(cx + cw // 2, cy + 3 * ch // 8, 0)
+        centerX := cx + cw / 2
+        centerY := cy + 3 * ch / 8
+        MouseMove(centerX, centerY, 0)
         StartMouseMonitoring()
     } else {
         if (IsWindowFullScreen()) {
-            MouseMove(cx + cw // 2, cy + ch, 0)
+            MouseMove(cx + cw / 2, cy + ch, 0)
         } else {
-            MouseMove(cx + cw // 2, cy + ch - sh // 10, 0)
+            MouseMove(cx + cw / 2, cy + ch - sh / 10, 0)
         }
     }
 }
@@ -253,8 +276,8 @@ CheckMouseMove() {
     ; 获取当前窗口的中心位置
     try {
         WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
-        centerX := clientWidth // 2
-        centerY := 3 * clientHeight // 8
+        centerX := clientWidth / 2
+        centerY := 3 * clientHeight / 8
 
         ; 检测鼠标是否离开窗口中心区域（允许一定的容差范围）
         tolerance := 5  ; 容差像素
@@ -301,7 +324,7 @@ BossKey() {
             hwnd := WinGetID("A")
             ; 验证窗口句柄有效性
             if (!hwnd || !WinExist(hwnd)) {
-                ShowStatusTip("无法获取有效的播放器窗口", "top", "red")
+                ShowStatusTip("无法获取有效的播放器窗口", , "red")
                 return
             }
             WinGetPos(&x, &y, &width, &height, hwnd)
@@ -322,7 +345,7 @@ BossKey() {
                         ; 没有找到播放器窗口，重置状态
                         isBossKeyActive := false
                         playerWindowPos := {}
-                        ShowStatusTip("播放器窗口已关闭", "top", "red")
+                        ShowStatusTip("播放器窗口已关闭", , "red")
                         return
                     }
                     ; 找到了其他播放器窗口，更新句柄
@@ -345,7 +368,7 @@ BossKey() {
         }
     } catch Error as e {
         isBossKeyActive := false
-        ShowStatusTip("老板键操作失败", "top", "red")
+        ShowStatusTip("老板键操作失败", , "red")
     }
 }
 
@@ -358,13 +381,13 @@ ToggleWindowTopMost() {
 
         if (isWindowTopMost) {
             WinSetAlwaysOnTop(1, hwnd)
-            ShowStatusTip("窗口已置顶", "top", "green")
+            ShowStatusTip("窗口已置顶", , "green")
         } else {
             WinSetAlwaysOnTop(0, hwnd)
-            ShowStatusTip("窗口取消置顶", "top", "")
+            ShowStatusTip("窗口取消置顶", , "")
         }
     } catch Error as e {
-        ShowStatusTip("置顶切换失败", "top", "red")
+        ShowStatusTip("置顶切换失败", , "red")
     }
 }
 
@@ -433,6 +456,31 @@ ResetSpeedState() {
 }
 
 ; ==================== 通用函数 ====================
+; 检测当前窗口是否存在弹幕
+HasDanmaku() {
+    try {
+        ; 获取当前活动窗口的工作区位置和大小
+        WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
+
+        ; 计算检测位置 2283 1306
+        ; 基于屏幕尺寸计算偏移量（277/2560和134/1440的比例）
+        offsetXRatio := 277 / 2560
+        offsetYRatio := 134 / 1440
+
+        ; 计算实际检测位置
+        detectX := clientWidth - Round(sw * offsetXRatio)
+        detectY := clientHeight - Round(sh * offsetYRatio)
+
+        ; 获取指定位置的像素颜色
+        pixelColor := PixelGetColor(detectX, detectY)
+
+        ; 检测是否为白色（0xFFFFFF）
+        return (pixelColor == 0xFFFFFF)
+    } catch {
+        return false
+    }
+}
+
 ; 检测当前窗口是否全屏
 IsWindowFullScreen() {
     try {
@@ -457,8 +505,8 @@ IsDarkMode() {
     }
 }
 
-ShowStatusTip(message, position := statusTipPosition, color := "", width := statusTipWidth, height := statusTipHeight,
-    offX := statusTipOffsetX, offY := statusTipOffsetY) {
+ShowStatusTip(message, duration := statusTipDuration, color := "", width := statusTipWidth, height := statusTipHeight,
+    offX := statusTipOffsetX, offY := statusTipOffsetY, position := statusTipPosition) {
     static guis := Map()
 
     ; 清理旧的提示窗口
@@ -471,13 +519,13 @@ ShowStatusTip(message, position := statusTipPosition, color := "", width := stat
     WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
 
     ; 在窗口工作区内计算提示位置
-    x_pos := clientX + (clientWidth - width) // 2
+    x_pos := clientX + (clientWidth - width) / 2
 
     if (position = "bottom") {
-        y_pos := clientY + clientHeight - height - Round(sh / 13.3)
+        y_pos := clientY + clientHeight - height - sh / 13.3
     } else {
         ; top position
-        y_pos := clientY + Round(sh / 13.3)
+        y_pos := clientY + sh / 13.3
     }
 
     ; 确保提示不会超出屏幕边界
@@ -527,9 +575,9 @@ ShowStatusTip(message, position := statusTipPosition, color := "", width := stat
         "Int", 60, "Int", 60, "Ptr")
     DllCall("User32.dll\SetWindowRgn", "Ptr", hwnd, "Ptr", region, "Int", 1)
 
-    ; 保存引用并设置定时器
+    ; 保存引用并设置定时器，使用自定义显示时长
     guis[hwnd] := statusGui
-    SetTimer(() => CleanupGui(hwnd, guis), -750)
+    SetTimer(() => CleanupGui(hwnd, guis), -duration)
 }
 
 CleanupGui(hwnd, guis) {

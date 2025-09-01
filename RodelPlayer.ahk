@@ -24,6 +24,8 @@ isWindowTopMost := false                    ; 窗口置顶状态
 isBossKeyActive := false                    ; 老板键激活状态
 playerWindowPos := {}                       ; 播放器窗口位置信息
 isWaitingForMouse := false                  ; 是否正在等待鼠标移动
+isInformationMenuActive := false            ; 信息菜单激活状态
+isDanmakuActive := true                     ; 弹幕激活状态
 
 ; 全局屏幕尺寸变量
 sw := A_ScreenWidth                         ; 屏幕宽度
@@ -65,6 +67,7 @@ v:: ToggleControlBar()                      ; v 控制栏显示/隐藏
 i:: OpenInformationMenu()                   ; i 打开视频信息菜单
 k:: OpenSubtitleMenu()                      ; k 打开字幕调节菜单
 l:: OpenAudioTrackMenu()                    ; l 打开音轨调节菜单
+`;:: OpenDanmakuMenu()                      ; ` 打开弹幕调节菜单
 +q:: WinClose("A")                          ; Q 关闭播放窗口
 
 q:: {                                       ; q-q 关闭窗口
@@ -134,17 +137,14 @@ OpenSubtitleMenu() {
     pixelColor := PixelGetColor(targetX, targetY)
     ; 此位置是白色的话说明是倍速按钮，无字幕
     if (pixelColor == 0xFFFFFF) {
-        ShowStatusTip("当前视频无字幕")
-        MouseMove(clientWidth / 2, 3 * clientHeight / 8, 0)
-        StartMouseMonitoring()
-        return
+        ShowStatusTip("当前视频无字幕", 1000)
     } else {
         MouseMove(targetX, targetY, 0)
         Click()
+        ; 按下Tab键
+        Send("{Tab}")
     }
 
-    ; 按下Tab键
-    Send("{Tab}")
     if (IsWindowFullScreen()) {
         ; 移动鼠标到窗口右侧中央
         MouseMove(clientWidth, clientHeight / 2, 0)
@@ -189,26 +189,70 @@ OpenAudioTrackMenu() {
     SystemCursor("Show")
 }
 
-OpenInformationMenu() {
-    ; 检测当前窗口是否全屏
-    if (!IsWindowFullScreen()) {
-        ShowStatusTip("全屏播放时解锁此功能", , "red", 250, 65, 43, 11, "top")
-        return
-    }
+OpenDanmakuMenu() {
+    global isDanmakuActive
+    ; 获取当前活动窗口的工作区位置和大小
+    WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
 
-    ; 计算目标位置（按比例计算）
-    targetX := Round(sw * (300 / 2560))
-    targetY := Round(sh * (1300 / 1440))
+    rightOffsetRatio := 277 / 2560    ; 距离右边的比例
+    bottomOffsetRatio := 134 / 1440   ; 距离底部的比例
+
+    ; 根据屏幕实际大小计算偏移距离
+    rightOffset := Round(sw * rightOffsetRatio)
+    bottomOffset := Round(sh * bottomOffsetRatio)
+
+    ; 计算目标位置
+    targetX := clientWidth - rightOffset
+    targetY := clientHeight - bottomOffset
 
     SystemCursor("Hide")
     ; 移动到目标位置并点击
     MouseMove(targetX, targetY, 0)
-    Click()
+    SystemCursor("Hide")
+    Sleep(50)
+    if (HasDanmaku()) {
+        Click()
+        isDanmakuActive := !isDanmakuActive
+        ShowStatusTip(isDanmakuActive ? "已启用弹幕" : "已禁用弹幕", 1000, isDanmakuActive ? "green" : "red")
+    } else {
+        ShowStatusTip("未匹配弹幕", 1000)
+    }
 
-    ; 按下Tab键
-    Send("{Tab}")
-    MouseMove(0, sh, 0)
+    if (IsWindowFullScreen()) {
+        ; 移动鼠标到窗口右侧中央
+        MouseMove(clientWidth, clientHeight / 2, 0)
+    }
     SystemCursor("Show")
+}
+
+OpenInformationMenu() {
+    global isInformationMenuActive
+    ; 检测当前窗口是否全屏
+    if (!IsWindowFullScreen()) {
+        ShowStatusTip("全屏播放时解锁此功能", 1000, "red", 250, 65, 43, 11, "top")
+        return
+    }
+
+    SystemCursor("Hide")
+    if (isInformationMenuActive) {
+        MouseMove(sw, sh / 2, 0)
+        Click()
+    } else {
+        ; 计算目标位置（按比例计算）
+        targetX := Round(sw * (300 / 2560))
+        targetY := Round(sh * (1300 / 1440))
+
+        ; 移动到目标位置并点击
+        MouseMove(targetX, targetY, 0)
+        Click()
+
+        ; 按下Tab键
+        Send("{Tab}")
+        MouseMove(0, sh, 0)
+    }
+    SystemCursor("Show")
+
+    isInformationMenuActive := !isInformationMenuActive
 }
 
 ; 控制栏显示/隐藏切换功能

@@ -1,8 +1,9 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
+SetTitleMatchMode 3
+OnExit (*) => SystemCursor("Show")          ; 脚本退出时确保恢复鼠标光标显示
 
 `:: BossKey()                               ; ` 老板键
-OnExit (*) => SystemCursor("Show")          ; 脚本退出时确保恢复鼠标光标显示
 
 ; ==================== 全局变量 ====================
 scriptEnabled := true                       ; 脚本默认启用状态
@@ -31,18 +32,19 @@ isDanmakuActive := true                     ; 弹幕激活状态
 sw := A_ScreenWidth                         ; 屏幕宽度
 sh := A_ScreenHeight                        ; 屏幕高度
 
-; ==================== 脚本启用界面控制 ====================
-; 判断活跃窗口是否为播放器，避免在主页进行搜索时拦截正常的键盘输入
-IsInPlayer() {
-    try {
-        title := WinGetTitle("A")
-        return title != "小幻影视"
-    } catch {
-        return false
-    }
+; ==================== 启用控制 ====================
+; 主界面启用的快捷键
+#HotIf WinActive("小幻影视 ahk_exe RodelPlayer.UI.exe")
+/:: {
+    Send "{Ctrl down}"
+    Sleep 100
+    Send "f"
+    Sleep 100
+    Send "{Ctrl up}"
 }
 
-#HotIf WinActive("ahk_exe RodelPlayer.UI.exe") && IsInPlayer()
+; 播放界面启用的快捷键
+#HotIf WinActive("ahk_exe RodelPlayer.UI.exe", , "小幻影视")
 
 ; 脚本启用/禁用开关
 /:: {
@@ -51,8 +53,7 @@ IsInPlayer() {
     ShowStatusTip(scriptEnabled ? "脚本已启用" : "脚本已禁用", , scriptEnabled ? "green" : "red")
 }
 
-; 在播放器窗口内并且启用脚本的情况下允许快捷键映射
-#HotIf WinActive("ahk_exe RodelPlayer.UI.exe") && IsInPlayer() && scriptEnabled
+#HotIf WinActive("ahk_exe RodelPlayer.UI.exe", , "小幻影视") && scriptEnabled
 
 ; ==================== 快捷键自定义 ====================
 ; 基本控制
@@ -355,26 +356,26 @@ BossKey() {
 
     try {
         if (!isBossKeyActive) {
+            ; 如果不在小幻影视App，发送原始的 ` 键
             if (!WinActive("ahk_exe RodelPlayer.UI.exe")) {
-                ; 如果不在播放器窗口，发送原始的 ` 键
                 SendText("``")
                 return
             }
-            ; 暂停播放，保存窗口位置和状态
-            if (IsInPlayer()) {
+            ; 如果在播放界面，暂停播放并静音
+            if (WinActive("ahk_exe RodelPlayer.UI.exe", , "小幻影视")) {
                 Send("{Space}")
                 SoundSetMute(1)
             }
+            ; 保存窗口位置和状态
             hwnd := WinGetID("A")
-            ; 验证窗口句柄有效性
             if (!hwnd || !WinExist(hwnd)) {
                 ShowStatusTip("无法获取有效的播放器窗口", , "red")
                 return
             }
             WinGetPos(&x, &y, &width, &height, hwnd)
             playerWindowPos := { x: x, y: y, width: width, height: height, hwnd: hwnd }
-            Sleep(100)
             ; 隐藏窗口
+            Sleep(100)
             WinHide(hwnd)
             isBossKeyActive := true
         } else {
@@ -389,7 +390,7 @@ BossKey() {
                         ; 没有找到播放器窗口，重置状态
                         isBossKeyActive := false
                         playerWindowPos := {}
-                        ShowStatusTip("播放器窗口已关闭", , "red")
+                        ShowStatusTip("应用窗口已关闭", , "red")
                         return
                     }
                     ; 找到了其他播放器窗口，更新句柄
@@ -403,7 +404,7 @@ BossKey() {
                 WinActivate(hwnd)
                 Sleep(100)
                 ; 恢复播放
-                if (IsInPlayer()) {
+                if (WinActive("ahk_exe RodelPlayer.UI.exe", , "小幻影视")) {
                     Send("{Space}")
                     SoundSetMute(0)
                 }

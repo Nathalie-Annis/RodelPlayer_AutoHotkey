@@ -65,7 +65,9 @@ d:: Send("{Right}")                         ; d 快进
 m:: SoundSetMute(-1)                        ; m 系统静音切换
 t:: ToggleWindowTopMost()                   ; t 切换窗口置顶状态
 v:: ToggleControlBar()                      ; v 控制栏显示/隐藏
-i:: OpenInformationMenu()                   ; i 打开视频信息菜单
+u:: OpenPlaylistMenu()                      ; u 打开播放列表
+o:: OpenInformationMenu()                   ; i 打开视频信息菜单
+p:: OpenVersionMenu()                       ; p 打开版本切换菜单
 k:: OpenSubtitleMenu()                      ; k 打开字幕调节菜单
 l:: OpenAudioTrackMenu()                    ; l 打开音轨调节菜单
 `;:: OpenDanmakuMenu()                      ; ` 打开弹幕调节菜单
@@ -223,6 +225,50 @@ OpenDanmakuMenu() {
         ; 移动鼠标到窗口右侧中央
         MouseMove(clientWidth, clientHeight / 2, 0)
     }
+    SystemCursor("Show")
+}
+
+OpenPlaylistMenu() {
+    ; 检测当前窗口是否全屏
+    if (!IsWindowFullScreen()) {
+        ShowStatusTip("全屏播放时解锁此功能", 1000, "red", 250, 65, 43, 11, "top")
+        return
+    }
+
+    SystemCursor("Hide")
+    ; 计算目标位置（按比例计算）
+    targetX := Round(sw * (1660 / 2560))
+    targetY := Round(sh * (36 / 1440))
+
+    ; 移动到目标位置并点击
+    MouseMove(targetX, targetY, 0)
+    Click()
+
+    ; 按下Tab键
+    Send("{Tab}")
+    MouseMove(sw, sh / 2, 0)
+    SystemCursor("Show")
+}
+
+OpenVersionMenu() {
+    ; 检测当前窗口是否全屏
+    if (!IsWindowFullScreen()) {
+        ShowStatusTip("全屏播放时解锁此功能", 1000, "red", 250, 65, 43, 11, "top")
+        return
+    }
+
+    SystemCursor("Hide")
+    ; 计算目标位置（按比例计算）
+    targetX := Round(sw * (2000 / 2560))
+    targetY := Round(sh * (36 / 1440))
+
+    ; 移动到目标位置并点击
+    MouseMove(targetX, targetY, 0)
+    Click()
+
+    ; 按下Tab键
+    Send("{Tab}")
+    MouseMove(sw, sh / 2, 0)
     SystemCursor("Show")
 }
 
@@ -519,8 +565,8 @@ HasDanmaku() {
         ; 获取指定位置的像素颜色
         pixelColor := PixelGetColor(detectX, detectY)
 
-        ; 检测是否为白色（0xFFFFFF）
-        return (pixelColor == 0xFFFFFF)
+        ; 检测是否为文字背景色（白色或黑色，标识“弹”字）
+        return (pixelColor == 0xFFFFFF || pixelColor == 0x000000)
     } catch {
         return false
     }

@@ -58,8 +58,9 @@ sh := A_ScreenHeight                        ; 屏幕高度
 ; ==================== 快捷键自定义 ====================
 ; 基本控制
 f:: Send("{F11}")                           ; f 全屏
-a:: Send("{Left}")                          ; a 快退
-d:: Send("{Right}")                         ; d 快进
+Enter:: Send("{F11}")                       ; Enter 全屏
+a:: SendSeekCommand("{Left}")               ; a 快退
+d:: SendSeekCommand("{Right}")              ; d 快进
 ,:: Send("{Down}")                          ; , 降低播放器音量
 .:: Send("{Up}")                            ; . 增加播放器音量
 m:: SoundSetMute(-1)                        ; m 系统静音切换
@@ -781,4 +782,48 @@ StdoutToVar(sCmd, sDir := "", sEnc := "CP0") {
     DllCall("CloseHandle", "Ptr", NumGet(PI, 0, "Ptr"))
     DllCall("CloseHandle", "Ptr", NumGet(PI, A_PtrSize, "Ptr"))
     return { Output: sOutput, ExitCode: nExitCode }
+}
+
+; ==================== 辅助函数 ====================
+; 发送快退快进命令，隐藏控制栏后执行
+SendSeekCommand(key) {
+    ; 统一使用屏幕坐标
+    CoordMode("Mouse", "Screen")
+    MouseGetPos(&sx, &sy)
+
+    ; 取该窗口客户区的屏幕位置与尺寸
+    WinGetClientPos(&cx, &cy, &cw, &ch, "A")
+
+    ; 把鼠标从相对坐标系换算到绝对坐标系
+    mx := sx - cx
+    my := sy - cy
+
+    topBand := sh / 13.7
+    bottomBand := sh / 6
+
+    ; 判断控制栏显示状态
+    isShowingControlBar :=
+        (mx >= 0 && mx <= cw) &&
+        ((my >= 0 && my < topBand)
+        || (my >= ch - bottomBand && my <= ch))
+
+    if (isShowingControlBar) {
+        ; 控制栏显示时，先隐藏控制栏
+        SystemCursor("Hide")
+        centerX := cx + cw / 2
+        centerY := cy + 3 * ch / 8
+        MouseMove(centerX, centerY, 0)
+
+        ; 等待控制栏隐藏
+        Sleep(100)
+
+        ; 发送快退快进命令
+        Send(key)
+
+        ; 启动监控等待鼠标移动
+        StartMouseMonitoring()
+    } else {
+        ; 控制栏未显示时，直接发送命令
+        Send(key)
+    }
 }

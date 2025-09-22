@@ -1,6 +1,7 @@
 ## RodelPlayer_AutoHotkey
 
-自定义[小幻影视](https://apps.microsoft.com/detail/9nb0h051m4v4?hl=zh-CN&gl=CN)内置播放器快捷键的 AutoHotkey v2 脚本。
+自定义[小幻影视](https://apps.microsoft.com/detail/9nb0h051m4v4?hl=zh-CN&gl=CN)内置播放器快捷键的 AutoHotkey v2 脚本。  
+**2025.9.22:** 目前功能比较完善了，后续随缘更新，~~去折腾新买的Mac mini了~~
 
 > [!NOTE]
 >  **自用脚本**  
@@ -38,6 +39,8 @@
 | `u` | 打开/关闭播放列表 | 播放器全屏且有播放列表时才可使用 |
 | `o` | 打开/关闭视频信息列表 | 播放器全屏时才可使用 |
 | `p` | 打开/关闭版本选择菜单 | 播放器全屏且有多版本时才可使用 |
+| `g` | 去除/还原黑边 | 会显示OSD提示 |
+| `Ctrl S` | 截图 | 会显示OSD提示 |
 
 #### 三倍速播放操作
 

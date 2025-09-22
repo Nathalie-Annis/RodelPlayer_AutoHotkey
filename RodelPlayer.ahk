@@ -27,6 +27,7 @@ playerWindowPos := {}                       ; 播放器窗口位置信息
 isWaitingForMouse := false                  ; 是否正在等待鼠标移动
 isInformationMenuActive := false            ; 信息菜单激活状态
 isDanmakuActive := true                     ; 弹幕激活状态
+isBlackBarsRemoved := false                 ; 黑边去除状态
 
 ; 全局屏幕尺寸变量
 sw := A_ScreenWidth                         ; 屏幕宽度
@@ -72,6 +73,8 @@ p:: OpenVersionMenu()                       ; p 打开版本切换菜单
 k:: OpenSubtitleMenu()                      ; k 打开字幕调节菜单
 l:: OpenAudioTrackMenu()                    ; l 打开音轨调节菜单
 `;:: OpenDanmakuMenu()                      ; ` 打开弹幕调节菜单
+^s:: TakeScreenshot()                       ; Ctrl+S 截屏
+g:: RemoveBlackBars()                       ; g 去黑边
 +q:: WinClose("A")                          ; Q 关闭播放窗口
 
 q:: {                                       ; q-q 关闭窗口
@@ -340,63 +343,6 @@ ToggleControlBar() {
     }
 }
 
-; 开始鼠标移动监控
-StartMouseMonitoring() {
-    global isWaitingForMouse
-
-    isWaitingForMouse := true
-
-    ; 启动鼠标移动检测定时器 (50ms间隔检测)
-    SetTimer(CheckMouseMove, 50)
-
-    ; 启动2秒超时定时器
-    SetTimer(StopMouseMonitoring, -2000)
-}
-
-; 检测鼠标移动
-CheckMouseMove() {
-    global isWaitingForMouse
-
-    if (!isWaitingForMouse) {
-        SetTimer(CheckMouseMove, 0)  ; 停止定时器
-        return
-    }
-
-    ; 获取当前鼠标位置
-    MouseGetPos(&currentX, &currentY)
-
-    ; 获取当前窗口的中心位置
-    try {
-        WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
-        centerX := clientWidth / 2
-        centerY := 3 * clientHeight / 8
-
-        ; 检测鼠标是否离开窗口中心区域（允许一定的容差范围）
-        tolerance := 5  ; 容差像素
-        if (Abs(currentX - centerX) > tolerance || Abs(currentY - centerY) > tolerance) {
-            ; 鼠标移动了，停止所有监控
-            StopMouseMonitoring()
-        }
-    } catch {
-        ; 如果获取窗口信息失败，停止监控
-        StopMouseMonitoring()
-    }
-}
-
-; 停止鼠标监控的统一函数
-StopMouseMonitoring() {
-    global isWaitingForMouse
-
-    ; 显示光标
-    SystemCursor("Show")
-    ; 停止监控状态
-    isWaitingForMouse := false
-    ; 停止所有相关定时器
-    ; 注意：由于CheckMouseMove现在是带参数的匿名函数，需要通过设置isWaitingForMouse为false来停止
-    ; CheckMouseMove会在下次调用时自动停止定时器
-    SetTimer(StopMouseMonitoring, 0)    ; 停止超时定时器
-}
-
 ; 老板键功能
 BossKey() {
     global isBossKeyActive, playerWindowPos
@@ -546,6 +492,105 @@ ResetSpeedState() {
     ShowStatusTip("倍速状态已重置")
 }
 
+; 发送快退快进命令，隐藏控制栏后执行
+SendSeekCommand(key) {
+    ; 统一使用屏幕坐标
+    CoordMode("Mouse", "Screen")
+    MouseGetPos(&sx, &sy)
+
+    ; 取该窗口客户区的屏幕位置与尺寸
+    WinGetClientPos(&cx, &cy, &cw, &ch, "A")
+
+    ; 把鼠标从相对坐标系换算到绝对坐标系
+    mx := sx - cx
+    my := sy - cy
+
+    topBand := sh / 13.7
+    bottomBand := sh / 6
+
+    ; 判断控制栏显示状态
+    isShowingControlBar :=
+        (mx >= 0 && mx <= cw) &&
+        ((my >= 0 && my < topBand)
+        || (my >= ch - bottomBand && my <= ch))
+
+    if (isShowingControlBar) {
+        ; 控制栏显示时，先隐藏控制栏
+        SystemCursor("Hide")
+        centerX := cx + cw / 2
+        centerY := cy + 3 * ch / 8
+        MouseMove(centerX, centerY, 0)
+
+        ; 等待控制栏隐藏
+        Sleep(100)
+
+        ; 发送快退快进命令
+        Send(key)
+
+        ; 启动监控等待鼠标移动
+        StartMouseMonitoring()
+    } else {
+        ; 控制栏未显示时，直接发送命令
+        Send(key)
+    }
+}
+
+; 截屏功能
+TakeScreenshot() {
+    ; 统一使用屏幕坐标
+    CoordMode("Mouse", "Screen")
+    ; 取该窗口客户区的屏幕位置与尺寸
+    WinGetClientPos(&cx, &cy, &cw, &ch, "A")
+    ; 隐藏鼠标光标
+    SystemCursor("Hide")
+    ; 移动鼠标到窗口中央
+    centerX := cx + cw / 2
+    centerY := cy + 3 * ch / 8
+    MouseMove(centerX, centerY, 0)
+    ; 右键点击
+    Click("Right")
+    Sleep(50)
+    ; 将鼠标右移50像素，下移50像素（相对像素）
+    MouseMove(centerX + sw * (50 / 2560), centerY + sh * (50 / 1440), 0)
+    ; 等待鼠标移动完成
+    Sleep(50)
+    ; 左键点击
+    Click()
+    ; 截图完成提示
+    ShowStatusTip("截图成功", 2000, "green")
+    MouseMove(centerX, centerY, 0)
+    StartMouseMonitoring()
+}
+
+; 去黑边功能
+RemoveBlackBars() {
+    global isBlackBarsRemoved
+    ; 统一使用屏幕坐标
+    CoordMode("Mouse", "Screen")
+    ; 取该窗口客户区的屏幕位置与尺寸
+    WinGetClientPos(&cx, &cy, &cw, &ch, "A")
+    ; 隐藏鼠标光标
+    SystemCursor("Hide")
+    ; 移动鼠标到窗口中央
+    centerX := cx + cw / 2
+    centerY := cy + 3 * ch / 8
+    MouseMove(centerX, centerY, 0)
+    ; 右键点击
+    Click("Right")
+    Sleep(50)
+    ; 将鼠标右移50像素，下移120像素（相对像素）
+    MouseMove(centerX + sw * (50 / 2560), centerY + sh * (120 / 1440), 0)
+    ; 等待鼠标移动完成
+    Sleep(50)
+    ; 左键点击
+    Click()
+    ; 切换黑边状态并显示对应提示
+    isBlackBarsRemoved := !isBlackBarsRemoved
+    ShowStatusTip(isBlackBarsRemoved ? "已去除黑边" : "已还原黑边", 1000)
+    MouseMove(centerX, centerY, 0)
+    StartMouseMonitoring()
+}
+
 ; ==================== 通用函数 ====================
 ; 检测当前窗口是否存在弹幕
 HasDanmaku() {
@@ -681,6 +726,63 @@ CleanupGui(hwnd, guis) {
     }
 }
 
+; 开始鼠标移动监控
+StartMouseMonitoring() {
+    global isWaitingForMouse
+
+    isWaitingForMouse := true
+
+    ; 启动鼠标移动检测定时器 (50ms间隔检测)
+    SetTimer(CheckMouseMove, 50)
+
+    ; 启动2秒超时定时器
+    SetTimer(StopMouseMonitoring, -2000)
+}
+
+; 检测鼠标移动
+CheckMouseMove() {
+    global isWaitingForMouse
+
+    if (!isWaitingForMouse) {
+        SetTimer(CheckMouseMove, 0)  ; 停止定时器
+        return
+    }
+
+    ; 获取当前鼠标位置
+    MouseGetPos(&currentX, &currentY)
+
+    ; 获取当前窗口的中心位置
+    try {
+        WinGetClientPos(&clientX, &clientY, &clientWidth, &clientHeight, "A")
+        centerX := clientWidth / 2
+        centerY := 3 * clientHeight / 8
+
+        ; 检测鼠标是否离开窗口中心区域（允许一定的容差范围）
+        tolerance := 5  ; 容差像素
+        if (Abs(currentX - centerX) > tolerance || Abs(currentY - centerY) > tolerance) {
+            ; 鼠标移动了，停止所有监控
+            StopMouseMonitoring()
+        }
+    } catch {
+        ; 如果获取窗口信息失败，停止监控
+        StopMouseMonitoring()
+    }
+}
+
+; 停止鼠标监控的统一函数
+StopMouseMonitoring() {
+    global isWaitingForMouse
+
+    ; 显示光标
+    SystemCursor("Show")
+    ; 停止监控状态
+    isWaitingForMouse := false
+    ; 停止所有相关定时器
+    ; 注意：由于CheckMouseMove现在是带参数的匿名函数，需要通过设置isWaitingForMouse为false来停止
+    ; CheckMouseMove会在下次调用时自动停止定时器
+    SetTimer(StopMouseMonitoring, 0)    ; 停止超时定时器
+}
+
 ; https://wyagd001.github.io/v2/docs/lib/DllCall.htm#ExHideCursor
 SystemCursor(cmd)  ; cmd = "Show|Hide|Toggle|Reload"
 {
@@ -784,48 +886,4 @@ StdoutToVar(sCmd, sDir := "", sEnc := "CP0") {
     DllCall("CloseHandle", "Ptr", NumGet(PI, 0, "Ptr"))
     DllCall("CloseHandle", "Ptr", NumGet(PI, A_PtrSize, "Ptr"))
     return { Output: sOutput, ExitCode: nExitCode }
-}
-
-; ==================== 辅助函数 ====================
-; 发送快退快进命令，隐藏控制栏后执行
-SendSeekCommand(key) {
-    ; 统一使用屏幕坐标
-    CoordMode("Mouse", "Screen")
-    MouseGetPos(&sx, &sy)
-
-    ; 取该窗口客户区的屏幕位置与尺寸
-    WinGetClientPos(&cx, &cy, &cw, &ch, "A")
-
-    ; 把鼠标从相对坐标系换算到绝对坐标系
-    mx := sx - cx
-    my := sy - cy
-
-    topBand := sh / 13.7
-    bottomBand := sh / 6
-
-    ; 判断控制栏显示状态
-    isShowingControlBar :=
-        (mx >= 0 && mx <= cw) &&
-        ((my >= 0 && my < topBand)
-        || (my >= ch - bottomBand && my <= ch))
-
-    if (isShowingControlBar) {
-        ; 控制栏显示时，先隐藏控制栏
-        SystemCursor("Hide")
-        centerX := cx + cw / 2
-        centerY := cy + 3 * ch / 8
-        MouseMove(centerX, centerY, 0)
-
-        ; 等待控制栏隐藏
-        Sleep(100)
-
-        ; 发送快退快进命令
-        Send(key)
-
-        ; 启动监控等待鼠标移动
-        StartMouseMonitoring()
-    } else {
-        ; 控制栏未显示时，直接发送命令
-        Send(key)
-    }
 }

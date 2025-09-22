@@ -238,7 +238,7 @@ OpenPlaylistMenu() {
 
     SystemCursor("Hide")
     ; 计算目标位置（按比例计算）
-    targetX := Round(sw * (1660 / 2560))
+    targetX := Round(sw * (1700 / 2560))
     targetY := Round(sh * (36 / 1440))
 
     ; 移动到目标位置并点击
@@ -260,7 +260,7 @@ OpenVersionMenu() {
 
     SystemCursor("Hide")
     ; 计算目标位置（按比例计算）
-    targetX := Round(sw * (2000 / 2560))
+    targetX := Round(sw * (2070 / 2560))
     targetY := Round(sh * (36 / 1440))
 
     ; 移动到目标位置并点击
@@ -494,28 +494,27 @@ ToggleSpeed(targetSpeed) {
 
     try {
         Send("{Ctrl down}")
-        Sleep(25)
-
         if (currentSpeed != targetSpeed) {
             speedDiff := targetSpeed - currentSpeed
             adjustCount := Abs(speedDiff) * 4
             key := speedDiff > 0 ? "{Up}" : "{Down}"
 
             loop adjustCount {
-                Send(key)
                 Sleep(50)
+                Send(key)
             }
             currentSpeed := targetSpeed
         } else {
             ; 回到1倍速
             adjustCount := (currentSpeed - 1) * 4
             loop adjustCount {
-                Send("{Down}")
                 Sleep(50)
+                Send("{Down}")
             }
             currentSpeed := 1
         }
     } finally {
+        Sleep(50)
         Send("{Ctrl up}")
         isExecutingSpeed := false
     }
@@ -557,17 +556,20 @@ HasDanmaku() {
         ; 计算检测位置 2283 1306
         ; 基于屏幕尺寸计算偏移量（277/2560和134/1440的比例）
         offsetXRatio := 277 / 2560
-        offsetYRatio := 134 / 1440
+        offsetYRatio1 := 134 / 1440
+        offsetYRatio2 := 154 / 1440
 
         ; 计算实际检测位置
         detectX := clientWidth - Round(sw * offsetXRatio)
-        detectY := clientHeight - Round(sh * offsetYRatio)
+        detectY1 := clientHeight - Round(sh * offsetYRatio1)
+        detectY2 := clientHeight - Round(sh * offsetYRatio2)
 
-        ; 获取指定位置的像素颜色
-        pixelColor := PixelGetColor(detectX, detectY)
+        ; 获取指定位置的颜色
+        danColor := PixelGetColor(detectX, detectY1)
+        buttonBgColor := PixelGetColor(detectX, detectY2)
 
-        ; 检测是否为文字背景色（白色或黑色，标识“弹”字）
-        return (pixelColor == 0xFFFFFF || pixelColor == 0x000000)
+        ; 检测是否为文字背景色（白色或黑色，标识“弹”字，黑色的“弹”字要考虑到可能是视频黑边的情况，需要对弹幕按钮阴影颜色做检测）
+        return (danColor == 0xFFFFFF || danColor == 0x000000 && buttonBgColor != 0x000000)
     } catch {
         return false
     }

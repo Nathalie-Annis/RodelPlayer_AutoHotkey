@@ -1,12 +1,12 @@
 ## RodelPlayer_AutoHotkey
 
 自定义[小幻影视](https://apps.microsoft.com/detail/9nb0h051m4v4?hl=zh-CN&gl=CN)内置播放器快捷键的 AutoHotkey v2 脚本。  
-**2025.9.22:** 目前功能比较完善了，后续随缘更新，~~去折腾新买的Mac mini了~~
+**2025.9.22:** 目前功能比较完善了，后续随缘更新  
+**2026.4.26:** 小幻影视重构版开启公开测试，已经推送了播放器快捷键自定义功能，本脚本圆满退役～  
+## 祝愿小幻影视越来越好！
 
 > [!NOTE]
 >  **自用脚本**  
->  不接受快捷键修改建议，有需求自行修改  
->  不提供 AutoHotkey 下载和使用教程
 
 ### 自定义快捷键([原始快捷键](https://player.richasy.net/player#%E6%92%AD%E6%94%BE%E5%BF%AB%E6%8D%B7%E9%94%AE)仍可用)
 
